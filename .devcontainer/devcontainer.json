@@ -1,0 +1,22 @@
+{
+    "name": "SOA 2026 Q2 L5",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "platformio.platformio-ide",
+                "Wokwi.wokwi-vscode",
+                "ms-vscode.cpptools",
+                "tamasfe.even-better-toml"
+            ],
+            "settings": {
+                "platformio-ide.useBuiltinPIOCore": false,
+                "platformio-ide.customPATH": "/usr/local/bin"
+            }
+        }
+    },
+    "forwardPorts": [1880, 1883],
+    "postCreateCommand": "pio run -d Embebido/Proyecto_sin_Vibecoding || true"
+}
