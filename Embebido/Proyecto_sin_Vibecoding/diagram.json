@@ -13,7 +13,13 @@
     { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 427.1, "left": 81.4, "attrs": {} },
     { "type": "wokwi-relay-module", "id": "relay1", "top": 269, "left": 691.2, "attrs": {} },
     { "type": "wokwi-potentiometer", "id": "pot1", "top": 209.9, "left": 95.8, "attrs": {} },
-    { "type": "wokwi-dht22", "id": "dht1", "top": 182.7, "left": -120.6, "attrs": {} },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht1",
+      "top": 182.7,
+      "left": -120.6,
+      "attrs": { "temperature": "-12.6", "humidity": "8.5" }
+    },
     {
       "type": "wokwi-photoresistor-sensor",
       "id": "ldr1",
@@ -101,9 +107,6 @@
     [ "rgb1:COM", "bb1:bn.32", "black", [ "v0" ] ],
     [ "r3:2", "esp:D4", "green", [ "v0" ] ],
     [ "ldr1:AO", "esp:D35", "green", [ "v114.5", "h230.4" ] ],
-    [ "pot1:GND", "bb1:13t.e", "", [ "$bb" ] ],
-    [ "pot1:SIG", "bb1:14t.e", "", [ "$bb" ] ],
-    [ "pot1:VCC", "bb1:15t.e", "", [ "$bb" ] ],
     [ "rgb1:R", "bb1:39b.g", "", [ "$bb" ] ],
     [ "rgb1:COM", "bb1:40b.h", "", [ "$bb" ] ],
     [ "rgb1:G", "bb1:41b.g", "", [ "$bb" ] ],
@@ -113,7 +116,10 @@
     [ "r2:1", "bb1:43b.g", "", [ "$bb" ] ],
     [ "r2:2", "bb1:49b.g", "", [ "$bb" ] ],
     [ "r3:1", "bb1:41b.i", "", [ "$bb" ] ],
-    [ "r3:2", "bb1:47b.i", "", [ "$bb" ] ]
+    [ "r3:2", "bb1:47b.i", "", [ "$bb" ] ],
+    [ "pot1:GND", "bb1:13t.e", "", [ "$bb" ] ],
+    [ "pot1:SIG", "bb1:14t.e", "", [ "$bb" ] ],
+    [ "pot1:VCC", "bb1:15t.e", "", [ "$bb" ] ]
   ],
   "dependencies": {}
 }
