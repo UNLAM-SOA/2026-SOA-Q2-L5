@@ -6,17 +6,19 @@
 #define PIN_LUZ     35  // LDR (Luz ambiental)
 #define PIN_DHT     14  // Sensor DHT22 (Temperatura)
 #define PIN_RESET   26  // Botón de Reset
-#define PIN_BOMBA   27  // Salida/LED para la bomba de agua
+#define PIN_BOMBA   19  // Salida/LED para la bomba de agua
+#define PIN_RED 2
+#define PIN_GREEN 4
+#define PIN_BLUE 5
 #define DHTTYPE DHT22
 
 #define HUMEDAD_MIN 40
 #define HUMEDAD_MED 50
 #define TEMPERATURA_ALTA 30
 #define LUZ_ALTA 715
-#define TIEMPO_TIMER_RIEGO 10000
-#define TIEMPO_TIMER_ABSORCION 300000  
+#define TIEMPO_TIMER_RIEGO 1000
+#define TIEMPO_TIMER_ABSORCION 30000  
 #define PRIORIDAD 1
-#define PRIORIDAD 2
 #define SIZE_QUEUE 10
 
 
@@ -37,19 +39,35 @@ enum Evento {
 };
 
 DHT dht(PIN_DHT, DHTTYPE);
-Estado estadoActual = Monintoreando;
+Estado estadoActual = Monitoreo;
 Evento eventoActual = CONTINUE; 
 
-//creo la cola 
-QueueHandle_t colaEventos = xQueueCreate(SIZE_QUEUE, sizeof(Evento));
+
+// Creo los handles para luego apuntar a las tareas
+TaskHandle_t handleTiempoRiego = NULL;
+TaskHandle_t handleTiempoAbsorcion = NULL; 
+QueueHandle_t colaEventos;
+
+// Prototipos de funciones 
+void FSM(Evento eventoActual);
+bool verificarRegadas();
+bool verificarSensoresSueloTemp();
+void encenderBomba();
+void detenerBomba();
+void prenderAzul();
+void prenderRojo();
+void prenderVerde();
+void setColor(int, int, int);
+
 
 int contador_regada=0;
 
-
-//Handler del timer por HW
 void tareaTiempoRiego(void *parameter){
 	Evento eventoActual = Timeout1; 
 	while(1){
+		//aca se frena la tarea hasta recibir el give
+		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
 		//realiza la accion cuando se cumple el tiempo determinado
 		vTaskDelay(pdMS_TO_TICKS(TIEMPO_TIMER_RIEGO));
 		//envio el evento a la cola 
@@ -60,6 +78,9 @@ void tareaTiempoRiego(void *parameter){
 void tareaTiempoAborcion(void *parameter){
 	Evento eventoActual = Timeout2;
 	while(1){
+		//aca se frena la tarea hasta recibir el give
+		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
 		//realiza la accion cuando se cumple el tiempo determinado
 		vTaskDelay(pdMS_TO_TICKS(TIEMPO_TIMER_ABSORCION));
 		eventoActual = Timeout2;
@@ -75,24 +96,26 @@ void tareaFSM(void *parameter){
 	}
 }
 
-void tareaGetEvent(void *parameter) 
-{
+void tareaGetEvent(void *parameter) {
 	Evento eventoActual; 
 	while(1){
-		if(verficarRegadas()){
-		eventoActual = Falta_agua;
+		if(verificarRegadas()){
+			eventoActual = Poca_agua;
 		}
 		else if(verificarSensoresSueloTemp()){
 			eventoActual = Necesita_riego;
 		}
+		/*else if(eventoActual == pocaAgua){
+			contador_regada = 0; 
+		}*/
 		else{
 			eventoActual = CONTINUE; 
 		}		
 		if(eventoActual != CONTINUE){
 			xQueueSend(colaEventos, &eventoActual, 10);
 		}
-		
-		vTaskDelay(pdMS_TO_TICKS(TIEMPO_TIMER_RIEGO));
+	
+		vTaskDelay(pdMS_TO_TICKS(500));
 
 	}	
 }
@@ -101,28 +124,31 @@ bool verificarRegadas()
 {
 	//dentro de del getevetn deben generar verificar el contador 
 	//y generar el evento Poca_agua
-	if (contador_regada==10)
-	{	
+	if (contador_regada == 10){	
 		eventoActual = Poca_agua;
-		return true;
+			return true;
 	}
 	return false;
 	
 }
 
-bool verificarSensoresSuelotemp()
-{
-	while(1){
-		if(analogRead(PIN_HUMEDAD) < HUMEDAD_MIN){
-		return true;
-		}
-		if(analogRead(PIN_HUMEDAD) < HUMEDAD_MED && dht.readTemperature() > TEMPERATURA_ALTA &&analogRead(PIN_LUZ) > 715){
-			return true;
-		}
-	}
-	
-	return false; 
+bool verificarSensoresSueloTemp(){
+  int humedadSuelo = analogRead(PIN_HUMEDAD);
+  float temp = dht.readTemperature();
+  int luz = analogRead(PIN_LUZ);
 
+  // Imprimir por monitor serie para debug
+  Serial.print("Humedad: "); Serial.print(humedadSuelo);
+  Serial.print(" | Temp: "); Serial.print(temp);
+  Serial.print("C | Luz: "); Serial.println(luz);
+
+  if(humedadSuelo < HUMEDAD_MIN){
+    return true;
+  }
+  if(humedadSuelo < HUMEDAD_MED && temp > TEMPERATURA_ALTA && luz > LUZ_ALTA){
+    return true;
+  }
+  return false; 
 }
 
 void encenderBomba() {
@@ -133,21 +159,48 @@ void detenerBomba() {
   digitalWrite(PIN_BOMBA, LOW);
 }
 
+void setColor(int r, int g, int b) {
+  analogWrite(PIN_RED, r);   // 0-255
+  analogWrite(PIN_GREEN, g);
+  analogWrite(PIN_BLUE, b);
+}
 
-void FSM(Evento eventoActual)
-{	
-	switch(estadoActual):
-	{
+void prenderAzul() {
+	  setColor(0, 0, 255);
+}
+
+void prenderVerde() {
+	  setColor(0, 255, 0);
+}
+
+void prenderRojo() {
+	  setColor(255, 0, 0);
+}
+
+void prenderAmarillo(){
+	setColor(255,255,0);
+}
+
+void FSM(Evento eventoActual){	
+
+	switch(estadoActual){
 		case Monitoreo:
 			switch(eventoActual){
 				case Poca_agua:
+					prenderRojo();
 					estadoActual = Falta_agua;
 					break; 
 
 				case Necesita_riego: 
 					encenderBomba();
 					estadoActual = Riego;
-					tareaTiempoRiego();
+					prenderAzul();
+					Serial.println(">>> TRANSICIÓN: Entrando a RIEGO. Bomba ENCENDIDA.");
+					//mando la señal al handle de la tarea para que avance 
+					
+					if(handleTiempoRiego != NULL){
+						xTaskNotifyGive(handleTiempoRiego);
+					}
 					break;
 
 				case CONTINUE:
@@ -158,12 +211,14 @@ void FSM(Evento eventoActual)
 		case Falta_agua:
 			switch (eventoActual){
 				case Reset_presionado:
+					contador_regada = 0;
 					estadoActual = Monitoreo; 
 					break;
 				
 				case CONTINUE:
 					break;
 				}
+				break;
 		
 		case Riego:	
 			switch(eventoActual)
@@ -172,21 +227,30 @@ void FSM(Evento eventoActual)
 					detenerBomba();
 					contador_regada++;
 					estadoActual = Absorcion; 
+					prenderVerde();
+					Serial.println(">>> TRANSICIÓN: Entrando a ABSORCIÓN. Bomba APAGADA.");
+					//mando la señal al handle de la tarea para que avance 
+					if(handleTiempoAbsorcion != NULL){
+						xTaskNotifyGive(handleTiempoAbsorcion);
+					}
 					break;
 				
 				case(CONTINUE):
 					break;
 			}
+			break; 
 		
 		case Absorcion:
 			switch(eventoActual){
 				case(Timeout2):
 					estadoActual = Monitoreo;
+					prenderAmarillo();
 					break;
 
 				case(CONTINUE):
 					break;
 			}
+			break; 
 
 	}
 }
@@ -195,11 +259,28 @@ void FSM(Evento eventoActual)
 void setup() {
   Serial.begin(115200);
   dht.begin(); 
-  xTaskCreate(tareaTiempoRiego, "Tarea_Tiempo_Riego", TAM_PILA, NULL, PRIORIDAD, NULL);
-  xTaskCreate(tareaTiempoAborcion, "Tarea_Tiempo_Absorcion", TAM_PILA, NULL, PRIORIDAD, NULL);
-  xTaskCreate(tareaGetEvent, "GetEvent", 2048, NULL, 1, NULL);
+
+	pinMode(PIN_BOMBA, OUTPUT);
+	pinMode(PIN_RESET, INPUT_PULLUP);
+	detenerBomba();
+
+	colaEventos = xQueueCreate(SIZE_QUEUE, sizeof(Evento));
+
+  xTaskCreate(tareaTiempoRiego, "Tarea_Tiempo_Riego", 2048, NULL, PRIORIDAD, &handleTiempoRiego);
+  xTaskCreate(tareaTiempoAborcion, "Tarea_Tiempo_Absorcion", 2048, NULL, PRIORIDAD, &handleTiempoAbsorcion);
+  
+	xTaskCreate(tareaGetEvent, "GetEvent", 2048, NULL, 1, NULL);
   xTaskCreate(tareaFSM, "FSM", 2048, NULL, 1, NULL);
 
+}
+
+void loop(){
+	if(digitalRead(PIN_RESET) == LOW){
+		Evento evento_reset = Reset_presionado; 
+		xQueueSend(colaEventos, &evento_reset,10);
+		vTaskDelay(pdMS_TO_TICKS(500));
+	}
+	vTaskDelay(pdMS_TO_TICKS(100));
 }
 		
 
