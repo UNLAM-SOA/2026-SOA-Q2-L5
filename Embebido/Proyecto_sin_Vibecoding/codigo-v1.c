@@ -1,5 +1,7 @@
 #include <DHT.h>
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // Definición de pines
 #define PIN_HUMEDAD 34  // Potenciómetro (Humedad del suelo)
@@ -16,8 +18,9 @@
 #define HUMEDAD_MED 50
 #define TEMPERATURA_ALTA 30
 #define LUZ_ALTA 715
-#define TIEMPO_TIMER_RIEGO 1000
-#define TIEMPO_TIMER_ABSORCION 30000  
+#define TIEMPO_TIMER_RIEGO 10000
+#define TIEMPO_TIMER_ABSORCION 10000  
+#define MAX_REGADAS 3
 #define PRIORIDAD 1
 #define SIZE_QUEUE 10
 
@@ -47,6 +50,7 @@ Evento eventoActual = CONTINUE;
 TaskHandle_t handleTiempoRiego = NULL;
 TaskHandle_t handleTiempoAbsorcion = NULL; 
 QueueHandle_t colaEventos;
+SemaphoreHandle_t mutexContador = NULL;
 
 // Prototipos de funciones 
 void FSM(Evento eventoActual);
@@ -99,15 +103,20 @@ void tareaFSM(void *parameter){
 void tareaGetEvent(void *parameter) {
 	Evento eventoActual; 
 	while(1){
+
+		if(digitalRead(PIN_RESET) == HIGH){
+			Evento evento_reset = Reset_presionado; 
+			xQueueSend(colaEventos, &evento_reset,10);
+			vTaskDelay(pdMS_TO_TICKS(500));
+		}
+
 		if(verificarRegadas()){
 			eventoActual = Poca_agua;
 		}
 		else if(verificarSensoresSueloTemp()){
 			eventoActual = Necesita_riego;
 		}
-		/*else if(eventoActual == pocaAgua){
-			contador_regada = 0; 
-		}*/
+
 		else{
 			eventoActual = CONTINUE; 
 		}		
@@ -122,12 +131,13 @@ void tareaGetEvent(void *parameter) {
 
 bool verificarRegadas()
 {
-	//dentro de del getevetn deben generar verificar el contador 
-	//y generar el evento Poca_agua
-	if (contador_regada == 10){	
+	xSemaphoreTake(mutexContador, portMAX_DELAY);
+	if (contador_regada == MAX_REGADAS){	
 		eventoActual = Poca_agua;
+		xSemaphoreGive(mutexContador);
 			return true;
 	}
+	xSemaphoreGive(mutexContador);
 	return false;
 	
 }
@@ -160,9 +170,10 @@ void detenerBomba() {
 }
 
 void setColor(int r, int g, int b) {
-  analogWrite(PIN_RED, r);   // 0-255
-  analogWrite(PIN_GREEN, g);
-  analogWrite(PIN_BLUE, b);
+
+  analogWrite(PIN_RED, 255 - r);   
+  analogWrite(PIN_GREEN, 255 - g);
+  analogWrite(PIN_BLUE, 255 - b);
 }
 
 void prenderAzul() {
@@ -188,13 +199,14 @@ void FSM(Evento eventoActual){
 			switch(eventoActual){
 				case Poca_agua:
 					prenderRojo();
+					Serial.println(">>> TRANSICION: Se quedo sin agua. Presionar el boton de RESET");
 					estadoActual = Falta_agua;
 					break; 
 
 				case Necesita_riego: 
 					encenderBomba();
-					estadoActual = Riego;
 					prenderAzul();
+					estadoActual = Riego;
 					Serial.println(">>> TRANSICIÓN: Entrando a RIEGO. Bomba ENCENDIDA.");
 					//mando la señal al handle de la tarea para que avance 
 					
@@ -211,7 +223,9 @@ void FSM(Evento eventoActual){
 		case Falta_agua:
 			switch (eventoActual){
 				case Reset_presionado:
+					xSemaphoreTake(mutexContador,portMAX_DELAY);
 					contador_regada = 0;
+					xSemaphoreGive(mutexContador);
 					estadoActual = Monitoreo; 
 					break;
 				
@@ -225,9 +239,11 @@ void FSM(Evento eventoActual){
 			{
 				case(Timeout1):
 					detenerBomba();
+					xSemaphoreTake(mutexContador,portMAX_DELAY);
 					contador_regada++;
-					estadoActual = Absorcion; 
+					xSemaphoreGive(mutexContador);
 					prenderVerde();
+					estadoActual = Absorcion; 
 					Serial.println(">>> TRANSICIÓN: Entrando a ABSORCIÓN. Bomba APAGADA.");
 					//mando la señal al handle de la tarea para que avance 
 					if(handleTiempoAbsorcion != NULL){
@@ -243,8 +259,8 @@ void FSM(Evento eventoActual){
 		case Absorcion:
 			switch(eventoActual){
 				case(Timeout2):
-					estadoActual = Monitoreo;
 					prenderAmarillo();
+					estadoActual = Monitoreo;
 					break;
 
 				case(CONTINUE):
@@ -262,10 +278,15 @@ void setup() {
 
 	pinMode(PIN_BOMBA, OUTPUT);
 	pinMode(PIN_RESET, INPUT_PULLUP);
+	pinMode(PIN_GREEN, OUTPUT);
+	pinMode(PIN_RED, OUTPUT);
+	pinMode(PIN_BLUE, OUTPUT);
 	detenerBomba();
 
+	prenderAmarillo();
 	colaEventos = xQueueCreate(SIZE_QUEUE, sizeof(Evento));
 
+	mutexContador = xSemaphoreCreateMutex();
   xTaskCreate(tareaTiempoRiego, "Tarea_Tiempo_Riego", 2048, NULL, PRIORIDAD, &handleTiempoRiego);
   xTaskCreate(tareaTiempoAborcion, "Tarea_Tiempo_Absorcion", 2048, NULL, PRIORIDAD, &handleTiempoAbsorcion);
   
@@ -275,11 +296,7 @@ void setup() {
 }
 
 void loop(){
-	if(digitalRead(PIN_RESET) == LOW){
-		Evento evento_reset = Reset_presionado; 
-		xQueueSend(colaEventos, &evento_reset,10);
-		vTaskDelay(pdMS_TO_TICKS(500));
-	}
+
 	vTaskDelay(pdMS_TO_TICKS(100));
 }
 		
