@@ -6,7 +6,10 @@
 #define PIN_LUZ     35  // LDR (Luz ambiental)
 #define PIN_DHT     14  // Sensor DHT22 (Temperatura)
 #define PIN_RESET   26  // Botón de Reset
-#define PIN_BOMBA   27  // Salida/LED para la bomba de agua
+#define PIN_BOMBA   19  // Salida/LED para la bomba de agua
+#define PIN_RED 2
+#define PIN_GREEN 4
+#define PIN_BLUE 5
 #define DHTTYPE DHT22
 
 #define HUMEDAD_MIN 40
@@ -51,6 +54,10 @@ bool verificarRegadas();
 bool verificarSensoresSueloTemp();
 void encenderBomba();
 void detenerBomba();
+void prenderAzul();
+void prenderRojo();
+void prenderVerde();
+void setColor(int, int, int);
 
 
 int contador_regada=0;
@@ -98,13 +105,16 @@ void tareaGetEvent(void *parameter) {
 		else if(verificarSensoresSueloTemp()){
 			eventoActual = Necesita_riego;
 		}
+		/*else if(eventoActual == pocaAgua){
+			contador_regada = 0; 
+		}*/
 		else{
 			eventoActual = CONTINUE; 
 		}		
 		if(eventoActual != CONTINUE){
 			xQueueSend(colaEventos, &eventoActual, 10);
 		}
-		
+	
 		vTaskDelay(pdMS_TO_TICKS(500));
 
 	}	
@@ -149,6 +159,27 @@ void detenerBomba() {
   digitalWrite(PIN_BOMBA, LOW);
 }
 
+void setColor(int r, int g, int b) {
+  analogWrite(PIN_RED, r);   // 0-255
+  analogWrite(PIN_GREEN, g);
+  analogWrite(PIN_BLUE, b);
+}
+
+void prenderAzul() {
+	  setColor(0, 0, 255);
+}
+
+void prenderVerde() {
+	  setColor(0, 255, 0);
+}
+
+void prenderRojo() {
+	  setColor(255, 0, 0);
+}
+
+void prenderAmarillo(){
+	setColor(255,255,0);
+}
 
 void FSM(Evento eventoActual){	
 
@@ -156,14 +187,17 @@ void FSM(Evento eventoActual){
 		case Monitoreo:
 			switch(eventoActual){
 				case Poca_agua:
+					prenderRojo();
 					estadoActual = Falta_agua;
 					break; 
 
 				case Necesita_riego: 
 					encenderBomba();
 					estadoActual = Riego;
+					prenderAzul();
 					Serial.println(">>> TRANSICIÓN: Entrando a RIEGO. Bomba ENCENDIDA.");
 					//mando la señal al handle de la tarea para que avance 
+					
 					if(handleTiempoRiego != NULL){
 						xTaskNotifyGive(handleTiempoRiego);
 					}
@@ -177,7 +211,7 @@ void FSM(Evento eventoActual){
 		case Falta_agua:
 			switch (eventoActual){
 				case Reset_presionado:
-				contador_regada = 0;
+					contador_regada = 0;
 					estadoActual = Monitoreo; 
 					break;
 				
@@ -193,6 +227,7 @@ void FSM(Evento eventoActual){
 					detenerBomba();
 					contador_regada++;
 					estadoActual = Absorcion; 
+					prenderVerde();
 					Serial.println(">>> TRANSICIÓN: Entrando a ABSORCIÓN. Bomba APAGADA.");
 					//mando la señal al handle de la tarea para que avance 
 					if(handleTiempoAbsorcion != NULL){
@@ -209,6 +244,7 @@ void FSM(Evento eventoActual){
 			switch(eventoActual){
 				case(Timeout2):
 					estadoActual = Monitoreo;
+					prenderAmarillo();
 					break;
 
 				case(CONTINUE):
@@ -232,7 +268,8 @@ void setup() {
 
   xTaskCreate(tareaTiempoRiego, "Tarea_Tiempo_Riego", 2048, NULL, PRIORIDAD, &handleTiempoRiego);
   xTaskCreate(tareaTiempoAborcion, "Tarea_Tiempo_Absorcion", 2048, NULL, PRIORIDAD, &handleTiempoAbsorcion);
-  xTaskCreate(tareaGetEvent, "GetEvent", 2048, NULL, 1, NULL);
+  
+	xTaskCreate(tareaGetEvent, "GetEvent", 2048, NULL, 1, NULL);
   xTaskCreate(tareaFSM, "FSM", 2048, NULL, 1, NULL);
 
 }
