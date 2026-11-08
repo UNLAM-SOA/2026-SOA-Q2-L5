@@ -1,7 +1,10 @@
+#include <WiFi.h>
 #include <DHT.h>
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <PubSubClient.h>
+
 
 // Definición de pines
 #define PIN_HUMEDAD 34  // Potenciómetro (Humedad del suelo)
@@ -12,15 +15,16 @@
 #define PIN_RED 2
 #define PIN_GREEN 4
 #define PIN_BLUE 5
+#define PIN_BUZZER 15
 #define DHTTYPE DHT22
 
-#define HUMEDAD_MIN 40
-#define HUMEDAD_MED 50
+#define HUMEDAD_MIN 4096 - (4096 * 0.4) //40
+#define HUMEDAD_MED 4096 * 0.5 // 50
 #define TEMPERATURA_ALTA 30
 #define LUZ_ALTA 715
 #define TIEMPO_TIMER_RIEGO 10000
 #define TIEMPO_TIMER_ABSORCION 10000  
-#define MAX_REGADAS 3
+#define MAX_REGADAS 2
 #define PRIORIDAD 1
 #define SIZE_QUEUE 10
 
@@ -45,6 +49,18 @@ DHT dht(PIN_DHT, DHTTYPE);
 Estado estadoActual = Monitoreo;
 Evento eventoActual = CONTINUE; 
 
+// Credenciales WiFi (Wokwi) y MQTT (EMQX)
+const char* ssid = "Speedy-Fibra-C46EBB";
+const char* password = "3Juz5Vv2gwCKPGhKF7EY";
+const char* mqtt_server = "broker.emqx.io";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// Nombres de los temas (topics)
+const char* topic_sensores = "tomas/riego/sensores";
+const char* topic_comandos = "tomas/riego/comandos";
+
 
 // Creo los handles para luego apuntar a las tareas
 TaskHandle_t handleTiempoRiego = NULL;
@@ -61,10 +77,80 @@ void detenerBomba();
 void prenderAzul();
 void prenderRojo();
 void prenderVerde();
-void setColor(int, int, int);
+void prenderBuzzer();
+void apagarBuzzer();
+void setup_wifi();
+void callback(char* toic, byte* , unsigned int );
+void reconnect();
 
 
 int contador_regada=0;
+bool forzar_riego = false; 
+/*
+void setup_wifi() {
+  delay(10);
+  Serial.print("Conectando a WiFi ");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi conectado");
+}
+*/
+
+void setup_wifi() {
+  delay(10);
+  Serial.print("Conectando a WiFi ");
+  
+  // 1. Forzar modo estación (cliente)
+  WiFi.mode(WIFI_STA);
+  // 2. Desconectar y limpiar configuraciones previas
+  WiFi.disconnect(true);
+  delay(100);
+
+  WiFi.begin(ssid, password);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi conectado");
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  String mensaje = "";
+  for (int i = 0; i < length; i++) {
+    mensaje += (char)payload[i];
+  }
+  Serial.print("Mensaje recibido ["); Serial.print(topic); Serial.print("]: ");
+  Serial.println(mensaje);
+
+  // Si recibo la orden desde MyMQTT, disparamos el riego en la FSM 
+  if (mensaje == "regar") {
+    forzar_riego = true; 
+    Serial.println("Comando remoto: forzando riego.......");
+  }
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Intentando conexión MQTT...");
+    String clientId = "ESP32-Riego-";
+    clientId += String(random(0xffff), HEX); // ID aleatorio
+    
+    if (client.connect(clientId.c_str())) {
+      Serial.println("Conectado al broker!");
+      // Nos suscribimos al tema de comandos
+      client.subscribe(topic_comandos);
+    } else {
+      Serial.print("Fallo, rc=");
+      Serial.print(client.state());
+      Serial.println(" reintentando en 5 segundos");
+      vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+  }
+}
 
 void tareaTiempoRiego(void *parameter){
 	Evento eventoActual = Timeout1; 
@@ -152,6 +238,11 @@ bool verificarSensoresSueloTemp(){
   Serial.print(" | Temp: "); Serial.print(temp);
   Serial.print("C | Luz: "); Serial.println(luz);
 
+  if(forzar_riego == true){
+    forzar_riego = false; 
+    return true; 
+  }
+
   if(humedadSuelo < HUMEDAD_MIN){
     return true;
   }
@@ -169,27 +260,36 @@ void detenerBomba() {
   digitalWrite(PIN_BOMBA, LOW);
 }
 
-void setColor(int r, int g, int b) {
+void prenderBuzzer(){
+	digitalWrite(PIN_BUZZER, LOW); 
+}
 
-  analogWrite(PIN_RED, 255 - r);   
-  analogWrite(PIN_GREEN, 255 - g);
-  analogWrite(PIN_BLUE, 255 - b);
+void apagarBuzzer(){
+	digitalWrite(PIN_BUZZER, HIGH);
 }
 
 void prenderAzul() {
-	  setColor(0, 0, 255);
+	    digitalWrite(PIN_RED, LOW);
+      digitalWrite(PIN_GREEN, LOW);
+      digitalWrite(PIN_BLUE, HIGH);
 }
 
 void prenderVerde() {
-	  setColor(0, 255, 0);
+	  digitalWrite(PIN_RED, LOW);
+    digitalWrite(PIN_GREEN, HIGH);
+    digitalWrite(PIN_BLUE, LOW);
 }
 
 void prenderRojo() {
-	  setColor(255, 0, 0);
+	  digitalWrite(PIN_RED, HIGH);
+    digitalWrite(PIN_GREEN, LOW);
+    digitalWrite(PIN_BLUE, LOW);
 }
 
 void prenderAmarillo(){
-	setColor(255,255,0);
+  digitalWrite(PIN_RED, HIGH);
+  digitalWrite(PIN_GREEN, HIGH);
+  digitalWrite(PIN_BLUE, LOW);
 }
 
 void FSM(Evento eventoActual){	
@@ -200,6 +300,7 @@ void FSM(Evento eventoActual){
 				case Poca_agua:
 					prenderRojo();
 					Serial.println(">>> TRANSICION: Se quedo sin agua. Presionar el boton de RESET");
+					prenderBuzzer();
 					estadoActual = Falta_agua;
 					break; 
 
@@ -223,6 +324,7 @@ void FSM(Evento eventoActual){
 		case Falta_agua:
 			switch (eventoActual){
 				case Reset_presionado:
+					apagarBuzzer();
 					xSemaphoreTake(mutexContador,portMAX_DELAY);
 					contador_regada = 0;
 					xSemaphoreGive(mutexContador);
@@ -271,19 +373,35 @@ void FSM(Evento eventoActual){
 	}
 }
 
+String estadoToString(Estado estado) {
+  switch(estado) {
+    case Monitoreo:   return "Monitoreo";
+    case Falta_agua:  return "Falta de agua";
+    case Riego:       return "Riego";
+    case Absorcion:   return "Absorcion";
+    default:          return "Desconocido";
+  }
+}
 
 void setup() {
   Serial.begin(115200);
   dht.begin(); 
 
 	pinMode(PIN_BOMBA, OUTPUT);
-	pinMode(PIN_RESET, INPUT_PULLUP);
+	pinMode(PIN_RESET, INPUT);
 	pinMode(PIN_GREEN, OUTPUT);
 	pinMode(PIN_RED, OUTPUT);
 	pinMode(PIN_BLUE, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+	apagarBuzzer();
 	detenerBomba();
 
 	prenderAmarillo();
+
+	setup_wifi();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+
 	colaEventos = xQueueCreate(SIZE_QUEUE, sizeof(Evento));
 
 	mutexContador = xSemaphoreCreateMutex();
@@ -295,9 +413,28 @@ void setup() {
 
 }
 
-void loop(){
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop(); // Mantiene la conexión MQTT viva y revisa mensajes entrantes
 
-	vTaskDelay(pdMS_TO_TICKS(100));
+  // Publicar el estado de los sensores cada 5 segundos
+  static unsigned long lastMsg = 0;
+  unsigned long now = millis();
+  if (now - lastMsg > 5000) {
+    lastMsg = now;
+    
+    // preparo el mensaje
+    String payload = "Humedad: " + String(analogRead(PIN_HUMEDAD)) + 
+                     " | Temp: " + String(dht.readTemperature()) + "C" +
+                     " | Estado FSM: " + estadoToString(estadoActual) + "| Regadas actuales: " + String(contador_regada);
+                     
+    client.publish(topic_sensores, payload.c_str());
+  }
+
+  // Ceder tiempo a otras tareas
+  vTaskDelay(pdMS_TO_TICKS(50)); 
 }
 		
 
