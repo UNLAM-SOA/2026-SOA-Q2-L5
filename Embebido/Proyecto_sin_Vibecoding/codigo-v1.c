@@ -1,3 +1,5 @@
+#include <WiFi.h>
+#include "PubSubClient.h"
 #include <DHT.h>
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
@@ -12,15 +14,16 @@
 #define PIN_RED 2
 #define PIN_GREEN 4
 #define PIN_BLUE 5
+#define PIN_BUZZER 15
 #define DHTTYPE DHT22
 
-#define HUMEDAD_MIN 40
-#define HUMEDAD_MED 50
+#define HUMEDAD_MIN 4096 - (4096 * 0.4) //40
+#define HUMEDAD_MED 4096 * 0.5 // 50
 #define TEMPERATURA_ALTA 30
 #define LUZ_ALTA 715
 #define TIEMPO_TIMER_RIEGO 10000
 #define TIEMPO_TIMER_ABSORCION 10000  
-#define MAX_REGADAS 3
+#define MAX_REGADAS 2
 #define PRIORIDAD 1
 #define SIZE_QUEUE 10
 
@@ -61,7 +64,8 @@ void detenerBomba();
 void prenderAzul();
 void prenderRojo();
 void prenderVerde();
-void setColor(int, int, int);
+void prenderBuzzer();
+void apagarBuzzer();
 
 
 int contador_regada=0;
@@ -152,10 +156,10 @@ bool verificarSensoresSueloTemp(){
   Serial.print(" | Temp: "); Serial.print(temp);
   Serial.print("C | Luz: "); Serial.println(luz);
 
-  if(humedadSuelo < HUMEDAD_MIN){
+  if(humedadSuelo > HUMEDAD_MIN){
     return true;
   }
-  if(humedadSuelo < HUMEDAD_MED && temp > TEMPERATURA_ALTA && luz > LUZ_ALTA){
+  if(humedadSuelo > HUMEDAD_MED && temp > TEMPERATURA_ALTA && luz > LUZ_ALTA){
     return true;
   }
   return false; 
@@ -169,27 +173,36 @@ void detenerBomba() {
   digitalWrite(PIN_BOMBA, LOW);
 }
 
-void setColor(int r, int g, int b) {
+void prenderBuzzer(){
+	digitalWrite(PIN_BUZZER, LOW); 
+}
 
-  analogWrite(PIN_RED, 255 - r);   
-  analogWrite(PIN_GREEN, 255 - g);
-  analogWrite(PIN_BLUE, 255 - b);
+void apagarBuzzer(){
+	digitalWrite(PIN_BUZZER, HIGH);
 }
 
 void prenderAzul() {
-	  setColor(0, 0, 255);
+	    digitalWrite(PIN_RED, LOW);
+      digitalWrite(PIN_GREEN, LOW);
+      digitalWrite(PIN_BLUE, HIGH);
 }
 
 void prenderVerde() {
-	  setColor(0, 255, 0);
+	  digitalWrite(PIN_RED, LOW);
+    digitalWrite(PIN_GREEN, HIGH);
+    digitalWrite(PIN_BLUE, LOW);
 }
 
 void prenderRojo() {
-	  setColor(255, 0, 0);
+	  digitalWrite(PIN_RED, HIGH);
+    digitalWrite(PIN_GREEN, LOW);
+    digitalWrite(PIN_BLUE, LOW);
 }
 
 void prenderAmarillo(){
-	setColor(255,255,0);
+  digitalWrite(PIN_RED, HIGH);
+  digitalWrite(PIN_GREEN, HIGH);
+  digitalWrite(PIN_BLUE, LOW);
 }
 
 void FSM(Evento eventoActual){	
@@ -200,6 +213,7 @@ void FSM(Evento eventoActual){
 				case Poca_agua:
 					prenderRojo();
 					Serial.println(">>> TRANSICION: Se quedo sin agua. Presionar el boton de RESET");
+					prenderBuzzer();
 					estadoActual = Falta_agua;
 					break; 
 
@@ -223,6 +237,7 @@ void FSM(Evento eventoActual){
 		case Falta_agua:
 			switch (eventoActual){
 				case Reset_presionado:
+					apagarBuzzer();
 					xSemaphoreTake(mutexContador,portMAX_DELAY);
 					contador_regada = 0;
 					xSemaphoreGive(mutexContador);
@@ -281,9 +296,12 @@ void setup() {
 	pinMode(PIN_GREEN, OUTPUT);
 	pinMode(PIN_RED, OUTPUT);
 	pinMode(PIN_BLUE, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+	apagarBuzzer();
 	detenerBomba();
 
 	prenderAmarillo();
+
 	colaEventos = xQueueCreate(SIZE_QUEUE, sizeof(Evento));
 
 	mutexContador = xSemaphoreCreateMutex();
