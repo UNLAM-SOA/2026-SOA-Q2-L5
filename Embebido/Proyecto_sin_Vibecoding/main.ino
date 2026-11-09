@@ -50,16 +50,16 @@ Estado estadoActual = Monitoreo;
 Evento eventoActual = CONTINUE; 
 
 // Credenciales WiFi (Wokwi) y MQTT (EMQX)
-const char* ssid = "Speedy-Fibra-C46EBB";
-const char* password = "3Juz5Vv2gwCKPGhKF7EY";
+const char* ssid = "Wokwi-GUEST";
+const char* password = "";
 const char* mqtt_server = "broker.emqx.io";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 // Nombres de los temas (topics)
-const char* topic_sensores = "tomas/riego/sensores";
-const char* topic_comandos = "tomas/riego/comandos";
+const char* topic_sensores = "soa/grupo05/nexoriego/sensores";
+const char* topic_comandos = "soa/grupo05/nexoriego/comandos";
 
 
 // Creo los handles para luego apuntar a las tareas
@@ -86,18 +86,6 @@ void reconnect();
 
 int contador_regada=0;
 bool forzar_riego = false; 
-/*
-void setup_wifi() {
-  delay(10);
-  Serial.print("Conectando a WiFi ");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi conectado");
-}
-*/
 
 void setup_wifi() {
   delay(10);
@@ -426,9 +414,10 @@ void loop() {
     lastMsg = now;
     
     // preparo el mensaje
-    String payload = "Humedad: " + String(analogRead(PIN_HUMEDAD)) + 
-                     " | Temp: " + String(dht.readTemperature()) + "C" +
-                     " | Estado FSM: " + estadoToString(estadoActual) + "| Regadas actuales: " + String(contador_regada);
+    String payload = "{\"temperatura\":\"" + String(dht.readTemperature()) + "\"," +
+                 "\"humedad\":\"" + String(analogRead(PIN_HUMEDAD)) + "\"," +
+                 "\"luz\":\"" + String(analogRead(PIN_LUZ)) + "\"," +
+                 "\"estado\":\"" + estadoToString(estadoActual) + "\"}";
                      
     client.publish(topic_sensores, payload.c_str());
   }
