@@ -85,6 +85,7 @@ void reconnect();
 
 
 int contador_regada=0;
+bool forzar_riego = false; 
 /*
 void setup_wifi() {
   delay(10);
@@ -126,10 +127,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(mensaje);
 
   // Si recibo la orden desde MyMQTT, disparamos el riego en la FSM 
-  if (mensaje == "ENCENDER") {
-    Evento eventoFuerza = Necesita_riego;
-    xQueueSend(colaEventos, &eventoFuerza, 10);
-    Serial.println("Comando remoto: Forzando riego");
+  if (mensaje == "regar") {
+    forzar_riego = true; 
+    Serial.println("Comando remoto: forzando riego.......");
   }
 }
 
@@ -237,6 +237,11 @@ bool verificarSensoresSueloTemp(){
   Serial.print("Humedad: "); Serial.print(humedadSuelo);
   Serial.print(" | Temp: "); Serial.print(temp);
   Serial.print("C | Luz: "); Serial.println(luz);
+
+  if(forzar_riego == true){
+    forzar_riego = false; 
+    return true; 
+  }
 
   if(humedadSuelo < HUMEDAD_MIN){
     return true;
@@ -383,7 +388,7 @@ void setup() {
   dht.begin(); 
 
 	pinMode(PIN_BOMBA, OUTPUT);
-	pinMode(PIN_RESET, INPUT_PULLUP);
+	pinMode(PIN_RESET, INPUT);
 	pinMode(PIN_GREEN, OUTPUT);
 	pinMode(PIN_RED, OUTPUT);
 	pinMode(PIN_BLUE, OUTPUT);
