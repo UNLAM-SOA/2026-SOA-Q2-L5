@@ -8,4 +8,5 @@ public class ConfigMQTT {
     public static final String TOPIC_BASE = "soa/grupo05/nexoriego/";
     public static final String TOPIC_SENSORES = TOPIC_BASE + "sensores";
     public static final String TOPIC_BOMBA = TOPIC_BASE + "bomba";
+    public static final String TOPIC_COMANDOS = TOPIC_BASE + "comandos";
 }

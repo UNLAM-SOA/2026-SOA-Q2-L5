@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
 
-        mqttHandler = new MqttHandler(getApplicationContext());
+        mqttHandler = MqttHandler.getInstance(this);
         connect();
         configurarBroadcastReceiver();
     }
@@ -122,7 +122,8 @@ public class MainActivity extends AppCompatActivity {
                         temperatura.setText(json.getString("temperatura") + " °C");
                     }
                     if (json.has("humedad")) {
-                        humedad.setText(json.getString("humedad") + " %");
+                        int humedadValue = (int) (Double.parseDouble(json.getString("humedad")) / 4096.0 * 100);
+                        humedad.setText(humedadValue + " %");
                     }
                     if (json.has("luz")) {
                         luz.setText(json.getString("luz") + " lum");

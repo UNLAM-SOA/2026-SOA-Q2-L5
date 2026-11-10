@@ -61,6 +61,9 @@ PubSubClient client(espClient);
 const char* topic_sensores = "soa/grupo05/nexoriego/sensores";
 const char* topic_comandos = "soa/grupo05/nexoriego/comandos";
 
+// -1 = usar LDR fisico | >= 0 = usar sensor de Android
+int luz_android = -1;
+
 
 // Creo los handles para luego apuntar a las tareas
 TaskHandle_t handleTiempoRiego = NULL;
@@ -118,6 +121,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (mensaje == "regar") {
     forzar_riego = true; 
     Serial.println("Comando remoto: forzando riego.......");
+  }
+  if (mensaje.startsWith("luz:")) {
+    luz_android = mensaje.substring(4).toInt();
   }
 }
 
@@ -219,7 +225,7 @@ bool verificarRegadas()
 bool verificarSensoresSueloTemp(){
   int humedadSuelo = analogRead(PIN_HUMEDAD);
   float temp = dht.readTemperature();
-  int luz = analogRead(PIN_LUZ);
+  int luz = (luz_android != -1) ? luz_android : analogRead(PIN_LUZ);
 
   // Imprimir por monitor serie para debug
   Serial.print("Humedad: "); Serial.print(humedadSuelo);
@@ -227,8 +233,9 @@ bool verificarSensoresSueloTemp(){
   Serial.print("C | Luz: "); Serial.println(luz);
 
   if(forzar_riego == true){
-    forzar_riego = false; 
-    return true; 
+    forzar_riego = false;
+	Serial.println("[REGAR] Comando manual desde Android");
+    return true;
   }
 
   if(humedadSuelo < HUMEDAD_MIN){

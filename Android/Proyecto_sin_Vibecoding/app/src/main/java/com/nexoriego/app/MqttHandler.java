@@ -17,14 +17,30 @@ public class MqttHandler implements MqttCallback {
     public static final String ACTION_DATA_RECEIVE = "com.nexoriego.app.intent.action.DATA_RECEIVE";
     public static final String ACTION_CONNECTION_LOST = "com.nexoriego.app.intent.action.CONNECTION_LOST";
 
+    private static volatile MqttHandler instance;
+
     private MqttClient client;
     private final Context mContext;
 
-    public MqttHandler(Context mContext) {
+    public static MqttHandler getInstance(Context context) {
+        if (instance == null) {
+            synchronized (MqttHandler.class) {
+                if (instance == null) {
+                    instance = new MqttHandler(context.getApplicationContext());
+                }
+            }
+        }
+        return instance;
+    }
+
+    private MqttHandler(Context mContext) {
         this.mContext = mContext;
     }
 
     public void connect(String brokerUrl, String clientId) {
+        if (client != null && client.isConnected()) {
+            return;
+        }
         try {
             MqttConnectOptions options = new MqttConnectOptions();
             options.setCleanSession(true);

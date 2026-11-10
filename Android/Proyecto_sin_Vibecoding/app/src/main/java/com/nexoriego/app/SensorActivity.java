@@ -16,6 +16,8 @@ public class SensorActivity extends AppCompatActivity implements SensorEventList
     private SensorManager sensorManager;
     private Sensor lightSensor;
     private TextView txtValorLuz;
+    private MqttHandler mqttHandler;
+    private long lastPublishTime = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,6 +27,8 @@ public class SensorActivity extends AppCompatActivity implements SensorEventList
         txtValorLuz = findViewById(R.id.txtValorLuz);
         Button btnVolver = findViewById(R.id.btnVolver);
         btnVolver.setOnClickListener(v -> finish());
+
+        mqttHandler = MqttHandler.getInstance(this);
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
@@ -43,6 +47,9 @@ public class SensorActivity extends AppCompatActivity implements SensorEventList
     @Override
     protected void onPause() {
         super.onPause();
+        if (mqttHandler != null) {
+            mqttHandler.publish(ConfigMQTT.TOPIC_COMANDOS, "luz:-1");
+        }
         if (sensorManager != null) {
             sensorManager.unregisterListener(this);
         }
@@ -52,6 +59,15 @@ public class SensorActivity extends AppCompatActivity implements SensorEventList
     public void onSensorChanged(SensorEvent event) {
         float lux = event.values[0];
         txtValorLuz.setText("Luz: " + lux + " lx");
+
+        long now = System.currentTimeMillis();
+        if (now - lastPublishTime >= 1000) {
+            lastPublishTime = now;
+            int valorLux = (int) lux;
+            if (mqttHandler != null) {
+                mqttHandler.publish(ConfigMQTT.TOPIC_COMANDOS, "luz:" + valorLux);
+            }
+        }
     }
 
     @Override
