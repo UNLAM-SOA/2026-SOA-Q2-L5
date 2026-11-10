@@ -50,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
         luz = findViewById(R.id.tvLuz);
         estado = findViewById(R.id.tvEstado);
         ivPlanta = findViewById(R.id.ivPlanta);
+
         ivPlanta.setImageResource(R.drawable.monitoreo);
 
         findViewById(R.id.cvLuz).setOnClickListener(v -> {
