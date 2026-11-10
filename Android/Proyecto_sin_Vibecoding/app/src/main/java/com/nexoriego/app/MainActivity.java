@@ -8,6 +8,7 @@ import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.StrictMode;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,6 +29,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView humedad;
     private TextView luz;
     private TextView estado;
+    private ImageView ivPlanta;
 
     public IntentFilter filterReceive;
     public IntentFilter filterConnectionLost;
@@ -47,6 +49,13 @@ public class MainActivity extends AppCompatActivity {
         humedad = findViewById(R.id.tvHumedad);
         luz = findViewById(R.id.tvLuz);
         estado = findViewById(R.id.tvEstado);
+        ivPlanta = findViewById(R.id.ivPlanta);
+        ivPlanta.setImageResource(R.drawable.monitoreo);
+
+        findViewById(R.id.cvLuz).setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, SensorActivity.class);
+            startActivity(intent);
+        });
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -119,12 +128,34 @@ public class MainActivity extends AppCompatActivity {
                         luz.setText(json.getString("luz") + " lum");
                     }
                     if (json.has("estado")) {
-                        estado.setText(json.getString("estado"));
+                        String estadoStr = json.getString("estado");
+                        estado.setText(estadoStr);
+                        actualizarImagenPlanta(estadoStr);
                     }
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
             }
+        }
+    }
+
+    private void actualizarImagenPlanta(String estadoStr) {
+        if (ivPlanta == null || estadoStr == null) return;
+        switch (estadoStr) {
+            case "Riego":
+                ivPlanta.setImageResource(R.drawable.regar);
+                break;
+            case "Falta de agua":
+            case "Falta_agua":
+                ivPlanta.setImageResource(R.drawable.falta_agua);
+                break;
+            case "Absorcion":
+                ivPlanta.setImageResource(R.drawable.absorcion);
+                break;
+            case "Monitoreo":
+            default:
+                ivPlanta.setImageResource(R.drawable.monitoreo);
+                break;
         }
     }
 }

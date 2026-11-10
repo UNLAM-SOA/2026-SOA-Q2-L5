@@ -24,17 +24,10 @@ public class MqttHandler implements MqttCallback {
         this.mContext = mContext;
     }
 
-    public void connect(String brokerUrl, String clientId, String username, String password) {
+    public void connect(String brokerUrl, String clientId) {
         try {
             MqttConnectOptions options = new MqttConnectOptions();
             options.setCleanSession(true);
-            if (username != null && !username.isEmpty()) {
-                options.setUserName(username);
-            }
-            if (password != null && !password.isEmpty()) {
-                options.setPassword(password.toCharArray());
-            }
-
             MemoryPersistence persistence = new MemoryPersistence();
             client = new MqttClient(brokerUrl, clientId, persistence);
             client.connect(options);
