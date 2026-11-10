@@ -123,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
                         temperatura.setText(json.getString("temperatura") + " °C");
                     }
                     if (json.has("humedad")) {
-                        int humedadValue = (int) (Double.parseDouble(json.getString("humedad")) / 4096.0 * 100);
+                        int humedadValue = (int) ((Double.parseDouble(json.getString("humedad")) / 4096.0) * 100);
                         humedad.setText(humedadValue + " %");
                     }
                     if (json.has("luz")) {
@@ -143,21 +143,28 @@ public class MainActivity extends AppCompatActivity {
 
     private void actualizarImagenPlanta(String estadoStr) {
         if (ivPlanta == null || estadoStr == null) return;
+
+        int idNuevaImagen = R.drawable.monitoreo; // Por defecto
+
         switch (estadoStr) {
             case "Riego":
-                ivPlanta.setImageResource(R.drawable.regar);
+                idNuevaImagen = R.drawable.regar;
                 break;
-            case "Falta de agua":
             case "Falta_agua":
-                ivPlanta.setImageResource(R.drawable.falta_agua);
+                idNuevaImagen = R.drawable.falta_agua;
                 break;
             case "Absorcion":
-                ivPlanta.setImageResource(R.drawable.absorcion);
-                break;
-            case "Monitoreo":
-            default:
-                ivPlanta.setImageResource(R.drawable.monitoreo);
+                idNuevaImagen = R.drawable.absorcion;
                 break;
         }
+
+        final int imagenFinal = idNuevaImagen;
+        ivPlanta.animate().alpha(0f).setDuration(300).withEndAction(new Runnable() {
+            @Override
+            public void run() {
+                ivPlanta.setImageResource(imagenFinal);
+                ivPlanta.animate().alpha(1f).setDuration(300);
+            }
+        });
     }
 }
