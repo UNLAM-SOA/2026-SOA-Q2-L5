@@ -420,6 +420,8 @@ void loop() {
                  "\"estado\":\"" + estadoToString(estadoActual) + "\"}";
                      
     client.publish(topic_sensores, payload.c_str());
+	Serial.print("Mensaje publicado: ");
+	Serial.println(payload);
   }
 
   // Ceder tiempo a otras tareas
