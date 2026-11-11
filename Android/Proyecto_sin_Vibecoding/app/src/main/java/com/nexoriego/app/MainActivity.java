@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.StrictMode;
@@ -18,6 +19,9 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import android.os.Handler;
+import android.os.Looper;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -30,6 +34,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView luz;
     private TextView estado;
     private ImageView ivPlanta;
+    private String estadoAnterior = "";
+    private MediaPlayer mediaPlayer;
 
     public IntentFilter filterReceive;
     public IntentFilter filterConnectionLost;
@@ -131,8 +137,12 @@ public class MainActivity extends AppCompatActivity {
                     }
                     if (json.has("estado")) {
                         String estadoStr = json.getString("estado");
-                        estado.setText(estadoStr);
-                        actualizarImagenPlanta(estadoStr);
+
+                        if (!estadoStr.equals(estadoAnterior)) {
+                            estadoAnterior = estadoStr;
+                            estado.setText(estadoStr);
+                            actualizarImagenPlanta(estadoStr);
+                        }
                     }
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -158,6 +168,13 @@ public class MainActivity extends AppCompatActivity {
                 break;
         }
 
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+        }
+        mediaPlayer = MediaPlayer.create(this, R.raw.sonido_cambio_estado);
+        mediaPlayer.start();
+        mediaPlayer.setOnCompletionListener(mp -> mp.release());
+
         final int imagenFinal = idNuevaImagen;
         ivPlanta.animate().alpha(0f).setDuration(300).withEndAction(new Runnable() {
             @Override
@@ -166,5 +183,30 @@ public class MainActivity extends AppCompatActivity {
                 ivPlanta.animate().alpha(1f).setDuration(300);
             }
         });
+    }
+
+    private void simularRecepcionMqtt(String estadoFalso) {
+        Intent intent = new Intent(MqttHandler.ACTION_DATA_RECEIVE);
+        intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.setPackage(getPackageName());
+
+        String jsonFake = "{\"temperatura\":\"25.0\", \"humedad\":\"2048\", \"luz\":\"5000\", \"estado\":\"" + estadoFalso + "\"}";
+        intent.putExtra("msgJson", jsonFake);
+
+        sendBroadcast(intent);
+    }
+
+    private void iniciarTestAutomatico() {
+        Toast.makeText(this, "Iniciando Test Visual...", Toast.LENGTH_SHORT).show();
+        Handler handler = new Handler(Looper.getMainLooper());
+
+        String[] secuencia = {"Monitoreo", "Falta_agua", "Riego", "Absorcion", "Monitoreo"};
+
+        for (int i = 0; i < secuencia.length; i++) {
+            final String estadoTurno = secuencia[i];
+            handler.postDelayed(() -> {
+                simularRecepcionMqtt(estadoTurno);
+            }, 4000 * i);
+        }
     }
 }
