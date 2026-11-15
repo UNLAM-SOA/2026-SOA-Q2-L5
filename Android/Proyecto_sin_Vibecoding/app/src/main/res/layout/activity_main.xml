@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
-
-
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -11,6 +8,7 @@
     android:background="#F1F8E9"
     tools:context=".MainActivity">
 
+    <!-- Barra superior -->
     <include
         android:id="@+id/miTopBar"
         layout="@layout/layout_navbar"
@@ -18,15 +16,17 @@
         android:layout_height="wrap_content"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Contenedor central: Planta a la izquierda, Stats a la derecha -->
     <LinearLayout
+        android:id="@+id/llContenidoCentral"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
         android:orientation="horizontal"
         android:padding="16dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/btnForzarRiego"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@+id/miTopBar">
 
         <!-- Mitad Izquierda (50%): Imagen de la Planta -->
         <ImageView
@@ -191,5 +191,27 @@
 
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Nuevo Botón: Forzar Riego -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnForzarRiego"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="20dp"
+        android:backgroundTint="#2E7D32"
+        android:fontFamily="sans-serif-medium"
+        android:text="Forzar Riego"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        app:cornerRadius="12dp"
+        app:icon="@drawable/baseline_water_drop_24"
+        app:iconGravity="textStart"
+        app:iconPadding="8dp"
+        app:iconTint="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
