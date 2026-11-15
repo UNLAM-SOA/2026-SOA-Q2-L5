@@ -184,29 +184,4 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-
-    private void simularRecepcionMqtt(String estadoFalso) {
-        Intent intent = new Intent(MqttHandler.ACTION_DATA_RECEIVE);
-        intent.addCategory(Intent.CATEGORY_DEFAULT);
-        intent.setPackage(getPackageName());
-
-        String jsonFake = "{\"temperatura\":\"25.0\", \"humedad\":\"2048\", \"luz\":\"5000\", \"estado\":\"" + estadoFalso + "\"}";
-        intent.putExtra("msgJson", jsonFake);
-
-        sendBroadcast(intent);
-    }
-
-    private void iniciarTestAutomatico() {
-        Toast.makeText(this, "Iniciando Test Visual...", Toast.LENGTH_SHORT).show();
-        Handler handler = new Handler(Looper.getMainLooper());
-
-        String[] secuencia = {"Monitoreo", "Falta_agua", "Riego", "Absorcion", "Monitoreo"};
-
-        for (int i = 0; i < secuencia.length; i++) {
-            final String estadoTurno = secuencia[i];
-            handler.postDelayed(() -> {
-                simularRecepcionMqtt(estadoTurno);
-            }, 4000 * i);
-        }
-    }
 }

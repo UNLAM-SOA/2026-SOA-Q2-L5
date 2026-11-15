@@ -76,7 +76,7 @@
                         android:layout_gravity="center_vertical"
                         android:layout_marginStart="8dp"
                         android:fontFamily="sans-serif-medium"
-                        android:text="24.5 °C"
+                        android:text="0 °C"
                         android:textColor="#2E7D32"
                         android:textSize="18sp" />
                 </LinearLayout>
@@ -112,7 +112,7 @@
                         android:layout_gravity="center_vertical"
                         android:layout_marginStart="8dp"
                         android:fontFamily="sans-serif-medium"
-                        android:text="45 %"
+                        android:text="0 %"
                         android:textColor="#2E7D32"
                         android:textSize="18sp" />
                 </LinearLayout>
@@ -148,7 +148,7 @@
                         android:layout_gravity="center_vertical"
                         android:layout_marginStart="8dp"
                         android:fontFamily="sans-serif-medium"
-                        android:text="800 lum"
+                        android:text="0 lum"
                         android:textColor="#2E7D32"
                         android:textSize="18sp" />
                 </LinearLayout>
