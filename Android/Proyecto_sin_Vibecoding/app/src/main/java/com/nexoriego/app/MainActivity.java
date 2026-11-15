@@ -9,6 +9,8 @@ import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.StrictMode;
+import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -64,6 +66,14 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
+        Button btnForzarRiego = findViewById(R.id.btnForzarRiego);
+        btnForzarRiego.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                enviarComandoRiego("regar"); // Reemplaza "ON" por el payload exacto que usas en MyMQTT
+            }
+        });
+
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
@@ -75,11 +85,19 @@ public class MainActivity extends AppCompatActivity {
         configurarBroadcastReceiver();
     }
 
+    private void enviarComandoRiego(String payload) {
+        if (mqttHandler != null) {
+            mqttHandler.publish(ConfigMQTT.TOPIC_COMANDOS, payload);
+            Toast.makeText(this, "Comando de riego enviado", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Error: MqttHandler no inicializado", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void connect() {
         mqttHandler.connect(ConfigMQTT.MQTT_SERVER, ConfigMQTT.CLIENT_ID);
         mqttHandler.subscribe(ConfigMQTT.TOPIC_SENSORES);
     }
-
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private void configurarBroadcastReceiver() {
         filterReceive = new IntentFilter(MqttHandler.ACTION_DATA_RECEIVE);
