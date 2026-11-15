@@ -1,0 +1,1 @@
+NexoRiego - Simulacion Wokwi (ESP32 + DHT22 + LDR + Potenciometro + Rele + RGB + Buzzer + Reset)

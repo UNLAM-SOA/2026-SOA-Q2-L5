@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="emerald_primary">#1B6B50</color>
+    <color name="emerald_dark">#0E4734</color>
+    <color name="slate_bg">#F1F5F9</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="ink_primary">#0F172A</color>
+    <color name="ink_secondary">#475569</color>
+
+    <!-- Colores semanticos para estados FSM -->
+    <color name="state_monitoreo_bg">#FEF3C7</color>
+    <color name="state_monitoreo_fg">#92400E</color>
+    <color name="state_riego_bg">#DBEAFE</color>
+    <color name="state_riego_fg">#1E40AF</color>
+    <color name="state_absorcion_bg">#DCFCE7</color>
+    <color name="state_absorcion_fg">#166534</color>
+    <color name="state_alerta_bg">#FEE2E2</color>
+    <color name="state_alerta_fg">#991B1B</color>
+</resources>

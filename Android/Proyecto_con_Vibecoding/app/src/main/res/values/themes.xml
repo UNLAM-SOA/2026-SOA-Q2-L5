@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.NexoRiego" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/emerald_primary</item>
+        <item name="colorPrimaryDark">@color/emerald_dark</item>
+    </style>
+</resources>

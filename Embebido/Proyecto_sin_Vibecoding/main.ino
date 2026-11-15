@@ -58,8 +58,8 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 // Nombres de los temas (topics)
-const char* topic_sensores = "soa/grupo05/nexoriego/sensores";
-const char* topic_comandos = "soa/grupo05/nexoriego/comandos";
+const char* topic_sensores = "soa/grupo05/nexoriego_vc/sensores";
+const char* topic_comandos = "soa/grupo05/nexoriego_vc/comandos";
 
 // -1 = usar LDR fisico | >= 0 = usar sensor de Android
 int luz_android = -1;

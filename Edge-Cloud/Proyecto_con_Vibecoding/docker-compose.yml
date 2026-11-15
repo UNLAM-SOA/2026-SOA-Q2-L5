@@ -1,0 +1,32 @@
+services:
+  nodered:
+    build:
+      context: ./node-red
+      dockerfile: Dockerfile
+    container_name: nexoriego-nodered
+    restart: unless-stopped
+    ports:
+      - "${NODERED_PORT:-1880}:1880"
+    volumes:
+      - nodered_logs:/data/logs
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: nexoriego-mosquitto
+    profiles:
+      - local-broker
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+
+volumes:
+  nodered_logs:
+  mosquitto_data:
+  mosquitto_log:

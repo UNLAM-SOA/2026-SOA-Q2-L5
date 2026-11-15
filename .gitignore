@@ -30,3 +30,7 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+
+# VibeCoding
+Embebido/Proyecto_con_Vibecoding/.pio/libdeps/*
