@@ -178,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
             case "Riego":
                 idNuevaImagen = R.drawable.regar;
                 break;
-            case "Falta_agua":
+            case "Falta de agua":
                 idNuevaImagen = R.drawable.falta_agua;
                 break;
             case "Absorcion":

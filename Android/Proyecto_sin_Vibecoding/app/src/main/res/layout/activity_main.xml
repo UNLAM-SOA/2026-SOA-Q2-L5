@@ -39,12 +39,19 @@
             tools:srcCompat="@drawable/monitoreo" />
 
         <!-- Mitad Derecha (50%): Stats uno abajo del otro -->
-        <LinearLayout
+        <ScrollView
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:fillViewport="true"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="vertical">
 
             <!-- 1. Temperatura -->
             <androidx.cardview.widget.CardView
@@ -189,8 +196,10 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-        </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
     </LinearLayout>
+
 
     <!-- Nuevo Botón: Forzar Riego -->
     <com.google.android.material.button.MaterialButton
@@ -202,7 +211,7 @@
         android:layout_marginBottom="20dp"
         android:backgroundTint="#2E7D32"
         android:fontFamily="sans-serif-medium"
-        android:text="Forzar Riego"
+        android:text="Regar"
         android:textColor="#FFFFFF"
         android:textSize="16sp"
         app:cornerRadius="12dp"
