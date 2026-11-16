@@ -1,40 +1,33 @@
-#include <WiFi.h>
-#include <DHT.h>
 #include <Arduino.h>
+#include <DHT.h>
+#include <PubSubClient.h>
+#include <WiFi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-#include <PubSubClient.h>
-
 
 // Definición de pines
-#define PIN_HUMEDAD 34  // Potenciómetro (Humedad del suelo)
-#define PIN_LUZ     35  // LDR (Luz ambiental)
-#define PIN_DHT     14  // Sensor DHT22 (Temperatura)
-#define PIN_RESET   26  // Botón de Reset
-#define PIN_BOMBA   19  // Salida/LED para la bomba de agua
+#define PIN_HUMEDAD 34 // Potenciómetro (Humedad del suelo)
+#define PIN_LUZ 35     // LDR (Luz ambiental)
+#define PIN_DHT 14     // Sensor DHT22 (Temperatura)
+#define PIN_RESET 26   // Botón de Reset
+#define PIN_BOMBA 19   // Salida/LED para la bomba de agua
 #define PIN_RED 2
 #define PIN_GREEN 4
 #define PIN_BLUE 5
 #define PIN_BUZZER 15
 #define DHTTYPE DHT22
 
-#define HUMEDAD_MIN 4096 - (4096 * 0.4) //40
-#define HUMEDAD_MED 4096 * 0.5 // 50
+#define HUMEDAD_MIN 4096 - (4096 * 0.4) // 40
+#define HUMEDAD_MED 4096 * 0.5          // 50
 #define TEMPERATURA_ALTA 30
 #define LUZ_ALTA 715
 #define TIEMPO_TIMER_RIEGO 10000
-#define TIEMPO_TIMER_ABSORCION 10000  
+#define TIEMPO_TIMER_ABSORCION 10000
 #define MAX_REGADAS 2
 #define PRIORIDAD 1
 #define SIZE_QUEUE 10
 
-
-enum Estado {
-  Monitoreo,
-  Falta_agua,
-  Riego,
-  Absorcion
-};
+enum Estado { Monitoreo, Falta_agua, Riego, Absorcion };
 
 enum Evento {
   Poca_agua,
@@ -47,53 +40,49 @@ enum Evento {
 
 DHT dht(PIN_DHT, DHTTYPE);
 Estado estadoActual = Monitoreo;
-Evento eventoActual = CONTINUE; 
+Evento eventoActual = CONTINUE;
 
 // Credenciales WiFi (Wokwi) y MQTT (EMQX)
-const char* ssid = "Wokwi-GUEST";
-const char* password = "";
-const char* mqtt_server = "broker.emqx.io";
+const char *ssid = "Wokwi-GUEST";
+const char *password = "";
+const char *mqtt_server = "broker.emqx.io";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 // Nombres de los temas (topics)
-const char* topic_sensores = "soa/grupo05/nexoriego_vc/sensores";
-const char* topic_comandos = "soa/grupo05/nexoriego_vc/comandos";
+const char *topic_sensores = "soa/grupo05/nexoriego_vc/sensores";
+const char *topic_comandos = "soa/grupo05/nexoriego_vc/comandos";
 
 // -1 = usar LDR fisico | >= 0 = usar sensor de Android
 int luz_android = -1;
 
-
 // Creo los handles para luego apuntar a las tareas
 TaskHandle_t handleTiempoRiego = NULL;
-TaskHandle_t handleTiempoAbsorcion = NULL; 
+TaskHandle_t handleTiempoAbsorcion = NULL;
 QueueHandle_t colaEventos;
 SemaphoreHandle_t mutexContador = NULL;
 
-// Prototipos de funciones 
+// Prototipos de funciones
 void FSM(Evento eventoActual);
 bool verificarRegadas();
 bool verificarSensoresSueloTemp();
 void encenderBomba();
 void detenerBomba();
-void prenderAzul();
-void prenderRojo();
-void prenderVerde();
+void setColor();
 void prenderBuzzer();
 void apagarBuzzer();
 void setup_wifi();
-void callback(char* toic, byte* , unsigned int );
+void callback(char *toic, byte *, unsigned int);
 void reconnect();
 
-
-int contador_regada=0;
-bool forzar_riego = false; 
+int contador_regada = 0;
+bool forzar_riego = false;
 
 void setup_wifi() {
   delay(10);
   Serial.print("Conectando a WiFi ");
-  
+
   // 1. Forzar modo estación (cliente)
   WiFi.mode(WIFI_STA);
   // 2. Desconectar y limpiar configuraciones previas
@@ -101,7 +90,7 @@ void setup_wifi() {
   delay(100);
 
   WiFi.begin(ssid, password);
-  
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -109,17 +98,19 @@ void setup_wifi() {
   Serial.println("\nWiFi conectado");
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char *topic, byte *payload, unsigned int length) {
   String mensaje = "";
   for (int i = 0; i < length; i++) {
     mensaje += (char)payload[i];
   }
-  Serial.print("Mensaje recibido ["); Serial.print(topic); Serial.print("]: ");
+  Serial.print("Mensaje recibido [");
+  Serial.print(topic);
+  Serial.print("]: ");
   Serial.println(mensaje);
 
-  // Si recibo la orden desde MyMQTT, disparamos el riego en la FSM 
+  // Si recibo la orden desde MyMQTT, disparamos el riego en la FSM
   if (mensaje == "regar") {
-    forzar_riego = true; 
+    forzar_riego = true;
     Serial.println("Comando remoto: forzando riego.......");
   }
   if (mensaje.startsWith("luz:")) {
@@ -132,7 +123,7 @@ void reconnect() {
     Serial.print("Intentando conexión MQTT...");
     String clientId = "ESP32-Riego-";
     clientId += String(random(0xffff), HEX); // ID aleatorio
-    
+
     if (client.connect(clientId.c_str())) {
       Serial.println("Conectado al broker!");
       // Nos suscribimos al tema de comandos
@@ -146,266 +137,285 @@ void reconnect() {
   }
 }
 
-void tareaTiempoRiego(void *parameter){
-	Evento eventoActual = Timeout1; 
-	while(1){
-		//aca se frena la tarea hasta recibir el give
-		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+void tareaTiempoRiego(void *parameter) {
+  Evento eventoActual = Timeout1;
+  while (1) {
+    // aca se frena la tarea hasta recibir el give
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-		//realiza la accion cuando se cumple el tiempo determinado
-		vTaskDelay(pdMS_TO_TICKS(TIEMPO_TIMER_RIEGO));
-		//envio el evento a la cola 
-		xQueueSend(colaEventos, &eventoActual, 10);
-	}
+    // realiza la accion cuando se cumple el tiempo determinado
+    vTaskDelay(pdMS_TO_TICKS(TIEMPO_TIMER_RIEGO));
+    // envio el evento a la cola
+    xQueueSend(colaEventos, &eventoActual, 10);
+  }
 }
 
-void tareaTiempoAborcion(void *parameter){
-	Evento eventoActual = Timeout2;
-	while(1){
-		//aca se frena la tarea hasta recibir el give
-		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+void tareaTiempoAborcion(void *parameter) {
+  Evento eventoActual = Timeout2;
+  while (1) {
+    // aca se frena la tarea hasta recibir el give
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-		//realiza la accion cuando se cumple el tiempo determinado
-		vTaskDelay(pdMS_TO_TICKS(TIEMPO_TIMER_ABSORCION));
-		eventoActual = Timeout2;
-		xQueueSend(colaEventos, &eventoActual, 10);
-	}
+    // realiza la accion cuando se cumple el tiempo determinado
+    vTaskDelay(pdMS_TO_TICKS(TIEMPO_TIMER_ABSORCION));
+    eventoActual = Timeout2;
+    xQueueSend(colaEventos, &eventoActual, 10);
+  }
 }
 
-void tareaFSM(void *parameter){
-	Evento evento_recibido; 
-	while(1){
-		xQueueReceive(colaEventos,&evento_recibido, portMAX_DELAY);
-		FSM(evento_recibido);
-	}
+void tareaFSM(void *parameter) {
+  Evento evento_recibido;
+  while (1) {
+    xQueueReceive(colaEventos, &evento_recibido, portMAX_DELAY);
+    FSM(evento_recibido);
+  }
 }
 
 void tareaGetEvent(void *parameter) {
-	Evento eventoActual; 
-	while(1){
+  Evento eventoActual;
+  while (1) {
 
-		if(digitalRead(PIN_RESET) == HIGH){
-			Evento evento_reset = Reset_presionado; 
-			xQueueSend(colaEventos, &evento_reset,10);
-			vTaskDelay(pdMS_TO_TICKS(500));
-		}
+    if (digitalRead(PIN_RESET) == HIGH) {
+      Evento evento_reset = Reset_presionado;
+      xQueueSend(colaEventos, &evento_reset, 10);
+      vTaskDelay(pdMS_TO_TICKS(500));
+    }
 
-		if(verificarRegadas()){
-			eventoActual = Poca_agua;
-		}
-		else if(verificarSensoresSueloTemp()){
-			eventoActual = Necesita_riego;
-		}
+    if (verificarRegadas()) {
+      eventoActual = Poca_agua;
+    } else if (verificarSensoresSueloTemp()) {
+      eventoActual = Necesita_riego;
+    }
 
-		else{
-			eventoActual = CONTINUE; 
-		}		
-		if(eventoActual != CONTINUE){
-			xQueueSend(colaEventos, &eventoActual, 10);
-		}
-	
-		vTaskDelay(pdMS_TO_TICKS(500));
+    else {
+      eventoActual = CONTINUE;
+    }
+    if (eventoActual != CONTINUE) {
+      xQueueSend(colaEventos, &eventoActual, 10);
+    }
 
-	}	
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
 }
 
-bool verificarRegadas()
-{
-	xSemaphoreTake(mutexContador, portMAX_DELAY);
-	if (contador_regada == MAX_REGADAS){	
-		eventoActual = Poca_agua;
-		xSemaphoreGive(mutexContador);
-			return true;
-	}
-	xSemaphoreGive(mutexContador);
-	return false;
-	
+bool verificarRegadas() {
+  xSemaphoreTake(mutexContador, portMAX_DELAY);
+  if (contador_regada == MAX_REGADAS) {
+    eventoActual = Poca_agua;
+    xSemaphoreGive(mutexContador);
+    return true;
+  }
+  xSemaphoreGive(mutexContador);
+  return false;
 }
 
-bool verificarSensoresSueloTemp(){
+bool verificarSensoresSueloTemp() {
   int humedadSuelo = analogRead(PIN_HUMEDAD);
   float temp = dht.readTemperature();
   int luz = (luz_android != -1) ? luz_android : analogRead(PIN_LUZ);
 
   // Imprimir por monitor serie para debug
-  Serial.print("Humedad: "); Serial.print(humedadSuelo);
-  Serial.print(" | Temp: "); Serial.print(temp);
-  Serial.print("C | Luz: "); Serial.println(luz);
+  Serial.print("Humedad: ");
+  Serial.print(humedadSuelo);
+  Serial.print(" | Temp: ");
+  Serial.print(temp);
+  Serial.print("C | Luz: ");
+  Serial.println(luz);
 
-  if(forzar_riego == true){
+  if (forzar_riego == true) {
     forzar_riego = false;
-	Serial.println("[REGAR] Comando manual desde Android");
+    Serial.println("[REGAR] Comando manual desde Android");
     return true;
   }
 
-  if(humedadSuelo < HUMEDAD_MIN){
+  if (humedadSuelo < HUMEDAD_MIN) {
     return true;
   }
-  if(humedadSuelo < HUMEDAD_MED && temp > TEMPERATURA_ALTA && luz > LUZ_ALTA){
+  if (humedadSuelo < HUMEDAD_MED && temp > TEMPERATURA_ALTA && luz > LUZ_ALTA) {
     return true;
   }
-  return false; 
+  return false;
 }
 
-void encenderBomba() {
-  digitalWrite(PIN_BOMBA, HIGH);
+void encenderBomba() { digitalWrite(PIN_BOMBA, HIGH); }
+
+void detenerBomba() { digitalWrite(PIN_BOMBA, LOW); }
+
+void prenderBuzzer() { analogWrite(PIN_BUZZER, 128); }
+
+void apagarBuzzer() { analogWrite(PIN_BUZZER, 0); }
+
+void setColor(int r, int g, int b) {
+  analogWrite(PIN_RED, r);
+  analogWrite(PIN_GREEN, g);
+  analogWrite(PIN_BLUE, b);
 }
 
-void detenerBomba() {
-  digitalWrite(PIN_BOMBA, LOW);
+void tareaLEDBuzzer(void *parameter) {
+  for (;;) {
+    switch (estadoActual) {
+    case Monitoreo:
+      apagarBuzzer();
+      for (int i = 0; i <= 255; i += 5) {
+        if (estadoActual != Monitoreo)
+          break;
+        setColor(0, i, 0); // verde
+        vTaskDelay(pdMS_TO_TICKS(15));
+      }
+      for (int i = 255; i >= 0; i -= 5) {
+        if (estadoActual != Monitoreo)
+          break;
+        setColor(0, i, 0); // verde
+        vTaskDelay(pdMS_TO_TICKS(15));
+      }
+      break;
+
+    case Falta_agua:
+      setColor(255, 0, 0); // rojo
+      prenderBuzzer();
+      vTaskDelay(pdMS_TO_TICKS(200));
+
+      setColor(0, 0, 0); // apagado
+      apagarBuzzer();
+      vTaskDelay(pdMS_TO_TICKS(200));
+      break;
+
+    case Riego:
+      apagarBuzzer();
+      setColor(0, 0, 255); // azul
+      vTaskDelay(pdMS_TO_TICKS(100));
+      break;
+
+    case Absorcion:
+      apagarBuzzer();
+      setColor(255, 255, 0); // amarillo oscuro
+      vTaskDelay(pdMS_TO_TICKS(500));
+      setColor(50, 50, 0); // amarillo claro
+      vTaskDelay(pdMS_TO_TICKS(500));
+      break;
+    }
+  }
 }
 
-void prenderBuzzer(){
-	digitalWrite(PIN_BUZZER, LOW); 
-}
+void FSM(Evento eventoActual) {
+  switch (estadoActual) {
+  case Monitoreo:
+    switch (eventoActual) {
+    case Poca_agua:
+      Serial.println(
+          ">>> TRANSICION: Se quedo sin agua. Presionar el boton de RESET");
+      estadoActual = Falta_agua;
+      break;
 
-void apagarBuzzer(){
-	digitalWrite(PIN_BUZZER, HIGH);
-}
+    case Necesita_riego:
+      encenderBomba();
+      estadoActual = Riego;
+      Serial.println(">>> TRANSICIÓN: Entrando a RIEGO. Bomba ENCENDIDA.");
+      // mando la señal al handle de la tarea para que avance
 
-void prenderAzul() {
-	    digitalWrite(PIN_RED, LOW);
-      digitalWrite(PIN_GREEN, LOW);
-      digitalWrite(PIN_BLUE, HIGH);
-}
+      if (handleTiempoRiego != NULL) {
+        xTaskNotifyGive(handleTiempoRiego);
+      }
+      break;
 
-void prenderVerde() {
-	  digitalWrite(PIN_RED, LOW);
-    digitalWrite(PIN_GREEN, HIGH);
-    digitalWrite(PIN_BLUE, LOW);
-}
+    case CONTINUE:
+      break;
+    }
+    break;
 
-void prenderRojo() {
-	  digitalWrite(PIN_RED, HIGH);
-    digitalWrite(PIN_GREEN, LOW);
-    digitalWrite(PIN_BLUE, LOW);
-}
+  case Falta_agua:
+    switch (eventoActual) {
+    case Reset_presionado:
+      xSemaphoreTake(mutexContador, portMAX_DELAY);
+      contador_regada = 0;
+      xSemaphoreGive(mutexContador);
+      estadoActual = Monitoreo;
+      break;
 
-void prenderAmarillo(){
-  digitalWrite(PIN_RED, HIGH);
-  digitalWrite(PIN_GREEN, HIGH);
-  digitalWrite(PIN_BLUE, LOW);
-}
+    case CONTINUE:
+      break;
+    }
+    break;
 
-void FSM(Evento eventoActual){	
+  case Riego:
+    switch (eventoActual) {
+    case (Timeout1):
+      detenerBomba();
+      xSemaphoreTake(mutexContador, portMAX_DELAY);
+      contador_regada++;
+      xSemaphoreGive(mutexContador);
+      estadoActual = Absorcion;
+      Serial.println(">>> TRANSICIÓN: Entrando a ABSORCIÓN. Bomba APAGADA.");
+      // mando la señal al handle de la tarea para que avance
+      if (handleTiempoAbsorcion != NULL) {
+        xTaskNotifyGive(handleTiempoAbsorcion);
+      }
+      break;
 
-	switch(estadoActual){
-		case Monitoreo:
-			switch(eventoActual){
-				case Poca_agua:
-					prenderRojo();
-					Serial.println(">>> TRANSICION: Se quedo sin agua. Presionar el boton de RESET");
-					prenderBuzzer();
-					estadoActual = Falta_agua;
-					break; 
+    case (CONTINUE):
+      break;
+    }
+    break;
 
-				case Necesita_riego: 
-					encenderBomba();
-					prenderAzul();
-					estadoActual = Riego;
-					Serial.println(">>> TRANSICIÓN: Entrando a RIEGO. Bomba ENCENDIDA.");
-					//mando la señal al handle de la tarea para que avance 
-					
-					if(handleTiempoRiego != NULL){
-						xTaskNotifyGive(handleTiempoRiego);
-					}
-					break;
+  case Absorcion:
+    switch (eventoActual) {
+    case (Timeout2):
+      estadoActual = Monitoreo;
+      break;
 
-				case CONTINUE:
-					break;
-			}
-			break; 
-		
-		case Falta_agua:
-			switch (eventoActual){
-				case Reset_presionado:
-					apagarBuzzer();
-					xSemaphoreTake(mutexContador,portMAX_DELAY);
-					contador_regada = 0;
-					xSemaphoreGive(mutexContador);
-					estadoActual = Monitoreo; 
-					break;
-				
-				case CONTINUE:
-					break;
-				}
-				break;
-		
-		case Riego:	
-			switch(eventoActual)
-			{
-				case(Timeout1):
-					detenerBomba();
-					xSemaphoreTake(mutexContador,portMAX_DELAY);
-					contador_regada++;
-					xSemaphoreGive(mutexContador);
-					prenderVerde();
-					estadoActual = Absorcion; 
-					Serial.println(">>> TRANSICIÓN: Entrando a ABSORCIÓN. Bomba APAGADA.");
-					//mando la señal al handle de la tarea para que avance 
-					if(handleTiempoAbsorcion != NULL){
-						xTaskNotifyGive(handleTiempoAbsorcion);
-					}
-					break;
-				
-				case(CONTINUE):
-					break;
-			}
-			break; 
-		
-		case Absorcion:
-			switch(eventoActual){
-				case(Timeout2):
-					prenderAmarillo();
-					estadoActual = Monitoreo;
-					break;
-
-				case(CONTINUE):
-					break;
-			}
-			break; 
-
-	}
+    case (CONTINUE):
+      break;
+    }
+    break;
+  }
 }
 
 String estadoToString(Estado estado) {
-  switch(estado) {
-    case Monitoreo:   return "Monitoreo";
-    case Falta_agua:  return "Falta de agua";
-    case Riego:       return "Riego";
-    case Absorcion:   return "Absorcion";
-    default:          return "Desconocido";
+  switch (estado) {
+  case Monitoreo:
+    return "Monitoreo";
+  case Falta_agua:
+    return "Falta de agua";
+  case Riego:
+    return "Riego";
+  case Absorcion:
+    return "Absorcion";
+  default:
+    return "Desconocido";
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  dht.begin(); 
+  dht.begin();
 
-	pinMode(PIN_BOMBA, OUTPUT);
-	pinMode(PIN_RESET, INPUT);
-	pinMode(PIN_GREEN, OUTPUT);
-	pinMode(PIN_RED, OUTPUT);
-	pinMode(PIN_BLUE, OUTPUT);
+  pinMode(PIN_BOMBA, OUTPUT);
+  pinMode(PIN_RESET, INPUT);
+  pinMode(PIN_GREEN, OUTPUT);
+  pinMode(PIN_RED, OUTPUT);
+  pinMode(PIN_BLUE, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-	apagarBuzzer();
-	detenerBomba();
 
-	prenderAmarillo();
+  detenerBomba();
+  analogWrite(PIN_RED, 0);
+  analogWrite(PIN_GREEN, 0);
+  analogWrite(PIN_BLUE, 0);
+  analogWrite(PIN_BUZZER, 0);
 
-	setup_wifi();
+  setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 
-	colaEventos = xQueueCreate(SIZE_QUEUE, sizeof(Evento));
+  colaEventos = xQueueCreate(SIZE_QUEUE, sizeof(Evento));
+  mutexContador = xSemaphoreCreateMutex();
 
-	mutexContador = xSemaphoreCreateMutex();
-  xTaskCreate(tareaTiempoRiego, "Tarea_Tiempo_Riego", 2048, NULL, PRIORIDAD, &handleTiempoRiego);
-  xTaskCreate(tareaTiempoAborcion, "Tarea_Tiempo_Absorcion", 2048, NULL, PRIORIDAD, &handleTiempoAbsorcion);
-  
-	xTaskCreate(tareaGetEvent, "GetEvent", 2048, NULL, 1, NULL);
+  xTaskCreate(tareaTiempoRiego, "Tarea_Tiempo_Riego", 2048, NULL, PRIORIDAD,
+              &handleTiempoRiego);
+  xTaskCreate(tareaTiempoAborcion, "Tarea_Tiempo_Absorcion", 2048, NULL,
+              PRIORIDAD, &handleTiempoAbsorcion);
+  xTaskCreate(tareaGetEvent, "GetEvent", 2048, NULL, 1, NULL);
   xTaskCreate(tareaFSM, "FSM", 2048, NULL, 1, NULL);
-
+  xTaskCreate(tareaLEDBuzzer, "Tarea_Visual_Sonora", 2048, NULL, 1, NULL);
 }
 
 void loop() {
@@ -419,18 +429,17 @@ void loop() {
   unsigned long now = millis();
   if (now - lastMsg > 5000) {
     lastMsg = now;
-    
+
     // preparo el mensaje
-    String payload = "{\"temperatura\":\"" + String(dht.readTemperature()) + "\"," +
-                 "\"humedad\":\"" + String(analogRead(PIN_HUMEDAD)) + "\"," +
-                 "\"luz\":\"" + String(analogRead(PIN_LUZ)) + "\"," +
-                 "\"estado\":\"" + estadoToString(estadoActual) + "\"}";
-                     
+    String payload = "{\"temperatura\":\"" + String(dht.readTemperature()) +
+                     "\"," + "\"humedad\":\"" +
+                     String(analogRead(PIN_HUMEDAD)) + "\"," + "\"luz\":\"" +
+                     String(analogRead(PIN_LUZ)) + "\"," + "\"estado\":\"" +
+                     estadoToString(estadoActual) + "\"}";
+
     client.publish(topic_sensores, payload.c_str());
   }
 
   // Ceder tiempo a otras tareas
-  vTaskDelay(pdMS_TO_TICKS(50)); 
+  vTaskDelay(pdMS_TO_TICKS(50));
 }
-		
-
