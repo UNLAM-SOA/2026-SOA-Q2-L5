@@ -17,12 +17,12 @@
 #define PIN_BUZZER 15
 #define DHTTYPE DHT22
 
-#define HUMEDAD_MIN 4096 - (4096 * 0.4) // 40
-#define HUMEDAD_MED 4096 * 0.5          // 50
+#define HUMEDAD_MIN (4096 * 0.4) // 40
+#define HUMEDAD_MED (4096 * 0.5) // 50
 #define TEMPERATURA_ALTA 30
 #define LUZ_ALTA 715
-#define TIEMPO_TIMER_RIEGO 10000
-#define TIEMPO_TIMER_ABSORCION 10000
+#define TIEMPO_TIMER_RIEGO 20000
+#define TIEMPO_TIMER_ABSORCION 30000
 #define MAX_REGADAS 2
 #define PRIORIDAD 1
 #define SIZE_QUEUE 10
@@ -43,16 +43,16 @@ Estado estadoActual = Monitoreo;
 Evento eventoActual = CONTINUE;
 
 // Credenciales WiFi (Wokwi) y MQTT (EMQX)
-const char *ssid = "Wokwi-GUEST";
-const char *password = "";
+const char *ssid = "TomasWifi";
+const char *password = "tomas123";
 const char *mqtt_server = "broker.emqx.io";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 // Nombres de los temas (topics)
-const char *topic_sensores = "soa/grupo05/nexoriego_vc/sensores";
-const char *topic_comandos = "soa/grupo05/nexoriego_vc/comandos";
+const char *topic_sensores = "soa/grupo05/nexoriego/sensores";
+const char *topic_comandos = "soa/grupo05/nexoriego/comandos";
 
 // -1 = usar LDR fisico | >= 0 = usar sensor de Android
 int luz_android = -1;
@@ -210,7 +210,7 @@ bool verificarRegadas() {
 }
 
 bool verificarSensoresSueloTemp() {
-  int humedadSuelo = analogRead(PIN_HUMEDAD);
+  int humedadSuelo = 4095 - analogRead(PIN_HUMEDAD);
   float temp = dht.readTemperature();
   int luz = (luz_android != -1) ? luz_android : analogRead(PIN_LUZ);
 
@@ -241,9 +241,13 @@ void encenderBomba() { digitalWrite(PIN_BOMBA, HIGH); }
 
 void detenerBomba() { digitalWrite(PIN_BOMBA, LOW); }
 
-void prenderBuzzer() { analogWrite(PIN_BUZZER, 128); }
+void prenderBuzzer(){
+	digitalWrite(PIN_BUZZER, LOW); 
+}
 
-void apagarBuzzer() { analogWrite(PIN_BUZZER, 0); }
+void apagarBuzzer(){
+	digitalWrite(PIN_BUZZER, HIGH);
+}
 
 void setColor(int r, int g, int b) {
   analogWrite(PIN_RED, r);
@@ -400,7 +404,7 @@ void setup() {
   analogWrite(PIN_RED, 0);
   analogWrite(PIN_GREEN, 0);
   analogWrite(PIN_BLUE, 0);
-  analogWrite(PIN_BUZZER, 0);
+  apagarBuzzer();
 
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -433,7 +437,7 @@ void loop() {
     // preparo el mensaje
     String payload = "{\"temperatura\":\"" + String(dht.readTemperature()) +
                      "\"," + "\"humedad\":\"" +
-                     String(analogRead(PIN_HUMEDAD)) + "\"," + "\"luz\":\"" +
+                     String(4095 - analogRead(PIN_HUMEDAD)) + "\"," + "\"luz\":\"" +
                      String(analogRead(PIN_LUZ)) + "\"," + "\"estado\":\"" +
                      estadoToString(estadoActual) + "\"}";
 
